@@ -5,11 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Content-Security-Policy"
           content="default-src 'self';
-                   script-src 'self' https://cdn.tailwindcss.com https://www.gstatic.com/firebasejs/ https://generativelanguage.googleapis.com 'unsafe-inline';
+                   script-src 'self' https://cdn.tailwindcss.com https://www.gstatic.com/firebasejs/ 'unsafe-inline';
                    style-src 'self' https://fonts.googleapis.com https://cdnjs.cloudflare.com 'unsafe-inline';
                    font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com;
                    img-src 'self' data: https://placehold.co;
-                   connect-src 'self' wss://*.firebaseio.com https://*.firebaseio.com https://firestore.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://generativelanguage.googleapis.com https://*.firebasedatabase.app;
+                   connect-src 'self' wss://*.firebaseio.com https://*.firebaseio.com https://firestore.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://*.firebasedatabase.app;
                    frame-src 'self';
                    object-src 'none';
                    base-uri 'self';
@@ -17,7 +17,7 @@
     <title>جادوگر تصویر - نسخه آلترا دولوکس V3 (فوق امن)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" xintegrity="sha512-DTOQO9RWCH3ppGqcWaEA1BIZOC6xxalwEsw9c2QQeAIftl+Vegovlnee1c9QX4TctnWMn13TZye+giMm8e2LwA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" integrity="sha512-DTOQO9RWCH3ppGqcWaEA1BIZOC6xxalwEsw9c2QQeAIftl+Vegovlnee1c9QX4TctnWMn13TZye+giMm8e2LwA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
     <style>
         :root {
             --primary-color: #7c3aed; /* purple-600 */
@@ -647,9 +647,9 @@
         const statFavoritesCount = document.getElementById('statFavoritesCount');
         const statMemberSince = document.getElementById('statMemberSince');
 
-
-        const globalApiKey = "AIzaSyDYI0bzdkL9atuskJLx4XYjzUqdot7OP3E"; // Injected by Canvas environment - DO NOT CHANGE THIS LINE
-        // const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key=${globalApiKey}`; // Defined inside function now
+        // --- تغییر اصلی: حذف globalApiKey و تعریف API_PROXY_URL ---
+        // const globalApiKey = "AIzaSyDYI0bzdkL9atuskJLx4XYjzUqdot7OP3E"; // این خط حذف یا کامنت می‌شود
+        const API_PROXY_URL = '/Cnreal_AiImage.php'; // آدرس اسکریپت PHP پروکسی شما
 
         let currentImageDataBase64 = null;
         let currentPromptForFavorite = "";
@@ -685,7 +685,7 @@
 
 
         // --- Security: Input Sanitization ---
-        function sanitizeInput(inputString, maxLength = Infinity) {
+        function sanitizeInput(inputString, maxLength = Infinity) { /* ... same as V2 ... */
             if (typeof inputString !== 'string') return '';
             let sanitized = inputString.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
             sanitized = sanitized.replace(/<\/?[^>]+(>|$)/gi, '');
@@ -1091,10 +1091,12 @@
 
             const selectedStyle = stylePresetSelect.value;
             const aspectRatioHint = aspectRatioSelect.value;
-            let finalUserPrompt = mainPrompt;
-            if (selectedStyle) finalUserPrompt += `, ${selectedStyle}`;
-            if (aspectRatioHint) finalUserPrompt += `${aspectRatioHint}`;
-            if (negativePrompt) finalUserPrompt += `. Negative prompt: ${negativePrompt}`;
+            // finalUserPrompt for client-side display and history, not sent to API directly anymore
+            // PHP script will construct the final prompt for Google AI based on individual parts
+            let clientDisplayPrompt = mainPrompt;
+            if (selectedStyle) clientDisplayPrompt += `, ${selectedStyle}`;
+            if (aspectRatioHint) clientDisplayPrompt += `${aspectRatioHint}`;
+
 
             currentFullPromptForCopy = `پرامپت اصلی: ${mainPrompt}`;
             if (selectedStyle) currentFullPromptForCopy += ` | سبک: ${stylePresetSelect.options[stylePresetSelect.selectedIndex].text}`;
@@ -1125,21 +1127,34 @@
 
             let imageGeneratedSuccessfully = false;
             try {
-                // Construct API URL inside the function to use the globalApiKey
-                const currentApiUrl = `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key=${globalApiKey}`;
-                const payload = { instances: [{ "prompt": finalUserPrompt }], parameters: { "sampleCount": 1 } };
-                const response = await fetch(currentApiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                // --- این قسمت تغییر کرده است: درخواست به PHP پروکسی ارسال می‌شود ---
+                const payloadToProxy = {
+                    prompt: mainPrompt,
+                    negativePrompt: negativePrompt,
+                    style: selectedStyle,
+                    aspectRatio: aspectRatioHint
+                };
+
+                const response = await fetch(API_PROXY_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payloadToProxy)
+                });
 
                 if (!response.ok) {
                     const errorStatus = response.status;
-                    const errData = await response.json().catch(() => ({ error: { message: "پاسخ غیرمنتظره از سرور تصویرساز."} }));
-                    let userErrorMessage = `خطا در ارتباط با سرویس تصویرساز (${errorStatus}): ${errData.error?.message || "خطای نامشخص"}`;
-                    if (errorStatus === 401) {
+                    const errData = await response.json().catch(() => ({ error: { message: "پاسخ غیرمنتظره از سرور پروکسی PHP."} }));
+                    let userErrorMessage = `خطا در ارتباط با سرور پروکسی (${errorStatus}): ${errData.error?.message || "خطای نامشخص"}`;
+                    if (errorStatus === 400) { // Bad Request from proxy (e.g., missing prompt)
+                        userErrorMessage = `خطا در درخواست شما: ${errData.error?.message || "اطلاعات ارسالی معتبر نیست."}`;
+                    } else if (errorStatus === 405) { // Method Not Allowed from proxy
+                        userErrorMessage = "خطای سرور: نوع درخواست HTTP پشتیبانی نمی‌شود. (فقط POST)";
+                    } else if (errorStatus === 401) { // Potentially from Google API via proxy
                         userErrorMessage = "خطای احراز هویت (401): به نظر می‌رسد مشکلی در اتصال به سرویس تصویرساز وجود دارد. لطفاً چند لحظه صبر کرده و دوباره تلاش کنید یا صفحه را رفرش نمایید.";
-                    } else if (errorStatus === 429) { // Too Many Requests
+                    } else if (errorStatus === 429) { // Potentially from Google API via proxy (Too Many Requests)
                         userErrorMessage = "خطای سرور (429): تعداد درخواست‌های شما بیش از حد مجاز بوده است. لطفاً کمی صبر کنید و سپس دوباره تلاش کنید.";
-                    } else if (errorStatus >= 500) {
-                        userErrorMessage = `خطای سرور (${errorStatus}): مشکلی در سرور تصویرساز رخ داده است. لطفاً بعداً دوباره تلاش کنید.`;
+                    } else if (errorStatus >= 500) { // Internal Server Error from proxy or Google API via proxy
+                        userErrorMessage = `خطای سرور (${errorStatus}): مشکلی در سرور پروکسی یا سرویس تصویرساز رخ داده است. لطفاً بعداً دوباره تلاش کنید.`;
                     }
                     throw new Error(userErrorMessage);
                 }
@@ -1155,6 +1170,7 @@
                     copyPromptButton.classList.remove('hidden');
                     await checkIfCurrentImageIsFavorite(mainPrompt, currentImageDataBase64);
                     imageGeneratedSuccessfully = true;
+                    // Note: saveToPromptHistory uses mainPrompt, negativePrompt, style, aspectRatio
                     await saveToPromptHistory(mainPrompt, negativePrompt, selectedStyle, aspectRatioHint, currentImageDataBase64);
                     if (selectedStyle) await updateUserRecentlyUsedStyles(selectedStyle);
 
